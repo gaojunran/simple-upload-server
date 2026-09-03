@@ -1,3 +1,5 @@
+mod logs;
+
 use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -32,6 +34,7 @@ struct AppConfig {
     max_file_bytes: u64,
     max_total_bytes: u64,
     max_files: usize,
+    log_store: logs::LogStore,
 }
 
 struct ApiError(u16, String);
@@ -39,6 +42,10 @@ struct ApiError(u16, String);
 impl ApiError {
     fn bad(msg: impl Into<String>) -> Self {
         Self(400, msg.into())
+    }
+
+    fn internal(msg: impl Into<String>) -> Self {
+        Self(500, msg.into())
     }
 }
 
@@ -73,22 +80,42 @@ async fn main() {
         .await
         .expect("failed to create upload root");
     let root = root.canonicalize().expect("failed to canonicalize root");
+    let log_db = std::env::var("UPLOAD_LOG_DB")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(|home| PathBuf::from(home).join("upload-logs.db"))
+                .unwrap_or_else(|_| PathBuf::from("/var/tmp/upload-logs.db"))
+        });
+    if let Some(parent) = log_db.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .expect("failed to create log db directory");
+    }
+    let log_store = logs::LogStore::open(&log_db).expect("failed to open log db");
+
     let config = AppConfig {
         max_file_bytes: env_parse("UPLOAD_MAX_FILE_MB", DEFAULT_MAX_FILE_MB) * 1024 * 1024,
         max_total_bytes: env_parse("UPLOAD_MAX_TOTAL_MB", DEFAULT_MAX_TOTAL_MB) * 1024 * 1024,
         max_files: env_parse("UPLOAD_MAX_FILES", DEFAULT_MAX_FILES),
         root,
+        log_store,
     };
 
     println!(
-        "upload server listening on http://127.0.0.1:{port}, root: {},\n         PUT/GET /file/{{ns...}}/{{filename}}, POST /files (multipart=batch upload, json=batch download zip)",
+        "upload server listening on http://127.0.0.1:{port}, root: {}, log db: {},\n         PUT/GET /file/{{ns...}}/{{filename}}, POST /files (multipart=batch upload, json=batch download zip), POST/GET /logs",
         config.root.display(),
+        log_db.display(),
     );
 
     let app = Router::new()
         .route("/files", axum::routing::post(post_files))
         .route("/file", get(list_all))
         .route("/file/{*rest}", get(file_get).put(file_put))
+        .route(
+            "/logs",
+            axum::routing::get(logs::get_logs).post(logs::post_logs),
+        )
         .with_state(config)
         // 不用 axum 的 body 限制,由 handler 流式计数控制
         .layer(DefaultBodyLimit::disable());
@@ -602,7 +629,7 @@ fn split_segments(path: &str) -> Result<Vec<String>, ApiError> {
     Ok(out)
 }
 
-fn valid_namespace_segment(s: &str) -> bool {
+pub(crate) fn valid_namespace_segment(s: &str) -> bool {
     !s.is_empty()
         && s != "."
         && s != ".."

@@ -6,9 +6,10 @@
 
 ## 特性
 
-- 单二进制,无外部依赖,内存占用恒定(文件内容流式写盘,不整文件载入内存)
+- 单二进制,无外部依赖(system sqlite3 已静态编入),内存占用恒定(文件与日志均流式/批量写入,不整文件载入内存)
 - namespace 目录树:按 namespace 列表逐级建目录,天然做命名空间隔离;目录树可递归列出、按路径直接下载
 - 批量上传(多文件一次请求)与批量下载(打包 zip)对称设计
+- SQLite 日志库:单条/批量写入,按时间范围、关键词、namespace 及 and/or 组合查询
 - 字符集校验 + 路径成分剥离,杜绝路径穿越;失败路径清理临时文件
 - 进程崩溃由外部(如 systemd)托管,`Restart=always` 即可自愈
 
@@ -25,6 +26,8 @@
 | `GET` | `/file/{ns...}` 或 `/file` | 递归文件列表(扁平相对路径数组) |
 | `POST` | `/files` `multipart/form-data` | 批量上传 |
 | `POST` | `/files` `application/json` | 批量下载(打包 zip) |
+| `POST` | `/logs` | 写入日志(单条对象或数组) |
+| `GET` | `/logs` | 查询日志(条件组合) |
 
 ### PUT /file/{ns...}/{filename} — 单个上传
 
@@ -87,6 +90,45 @@ curl -X POST http://host:8765/files \
 
 批量下载打包前整体校验存在性,任一文件缺失返回 404 并列出缺失项,不会静默缺文件。
 
+### POST /logs — 写入日志
+
+body 为单个日志对象或对象数组,每条必须含:
+
+| 字段 | 必填 | 规则 |
+| --- | --- | --- |
+| `timestamp` | 是 | RFC3339 字符串(如 `2026-09-01T12:00:00Z`,支持 `+08:00` 时区偏移与小数秒)或 unix 秒整数 |
+| `namespace` | 是 | 非空字符串,限 `[A-Za-z0-9._-]`,长度 <= 128 |
+| `message` | 是 | 非空字符串,最多 64 KiB |
+| 其他 | 否 | 任意额外字段,原样保留并返回 |
+
+```bash
+curl -X POST http://host:8765/logs -H 'Content-Type: application/json' \
+     -d '{"timestamp":"2026-09-01T12:00:00Z","namespace":"app","message":"boot ok"}'
+# => {"ok":true,"count":1}
+```
+
+批量(单次最多 1000 条)为**全有或全无**:任一条校验失败整批不落库,返回 400 并指出出错条目。写入走事务 + WAL。
+
+### GET /logs — 查询日志
+
+条件全部可选,组合时按 `op` 连接:
+
+| 参数 | 语义 |
+| --- | --- |
+| `namespace` | 精确匹配 |
+| `keyword` | message 子串匹配(LIKE,`%`/`_`/`\` 自动转义)` |
+| `start` / `end` | 时间范围,闭区间,格式同 timestamp |
+| `op` | 条件间连接符:`and`(默认)/ `or` |
+| `order` | `desc`(默认,最新在前)/ `asc` |
+| `limit` / `offset` | 分页,默认 100,上限 1000 |
+
+```bash
+curl 'http://host:8765/logs?namespace=app&keyword=error&start=2026-09-01T00:00:00Z&op=and'
+# => {"ok":true,"total":N,"logs":[<原始日志对象>,...]}
+```
+
+`logs` 为存库时的原始 JSON 对象(含额外字段),按时间倒序返回,同刻按写入序稳定。
+
 ### 响应与错误
 
 | 状态码 | 含义 | 响应体 |
@@ -113,6 +155,7 @@ curl -X POST http://host:8765/files \
 | `UPLOAD_MAX_FILES` | `50` | 单次批量上传最大文件数 |
 | `UPLOAD_MAX_FILE_MB` | `512` | 单文件大小上限 |
 | `UPLOAD_MAX_TOTAL_MB` | `1024` | 单次批量上传总大小上限 |
+| `UPLOAD_LOG_DB` | `~/upload-logs.db` | SQLite 日志库文件路径,默认在用户主目录下 |
 
 ## 构建与运行
 
@@ -146,6 +189,7 @@ WantedBy=default.target
 - **大小控制**:流式计数,不依赖代理层限制,超限即刻中止并清理
 - **部分成功语义**:批量上传落盘阶段失败的文件记入 `errors`,已成功的保留,不整体回滚(覆盖语义下回滚不可安全实现)
 - **低内存下载**:单文件与批量下载(zip)均流式输出,整文件不驻留内存
+- **日志存储**:SQLite(WAL)存原始 JSON 整条 + `ts`/`namespace`/`message` 索引列,查询即走索引,批量写入走事务(全有或全无);单连接互斥,日志库独立于文件存储根,不进入文件列表
 
 ## 不适合做什么
 
