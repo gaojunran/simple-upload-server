@@ -1,4 +1,5 @@
 mod logs;
+mod web;
 
 use std::collections::HashSet;
 use std::io;
@@ -103,7 +104,7 @@ async fn main() {
     };
 
     println!(
-        "upload server listening on http://127.0.0.1:{port}, root: {}, log db: {},\n         PUT/GET /file/{{ns...}}/{{filename}}, POST /files (multipart=batch upload, json=batch download zip), POST/GET /logs",
+        "upload server listening on http://127.0.0.1:{port}, root: {}, log db: {},\n         PUT/GET /file/{{ns...}}/{{filename}}, POST /files (multipart=batch upload, json=batch download zip), POST/GET /logs, GET /web (upload page)",
         config.root.display(),
         log_db.display(),
     );
@@ -116,6 +117,7 @@ async fn main() {
             "/logs",
             axum::routing::get(logs::get_logs).post(logs::post_logs),
         )
+        .route("/web", get(web::index))
         .with_state(config)
         // 不用 axum 的 body 限制,由 handler 流式计数控制
         .layer(DefaultBodyLimit::disable());

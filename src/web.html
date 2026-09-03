@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件上传</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --text: #1f2328;
+    --muted: #656d76;
+    --border: #d4d4d8;
+    --accent: #2563eb;
+    --ok: #15803d;
+    --err: #b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181c;
+      --card: #1f2126;
+      --text: #e6e6e9;
+      --muted: #9ca0aa;
+      --border: #34363d;
+      --accent: #60a5fa;
+      --ok: #4ade80;
+      --err: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 16px;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  main {
+    width: 100%;
+    max-width: 560px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .desc { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input[type="text"], input[type="file"] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+  }
+  input[type="file"] { padding: 7px; }
+  button {
+    margin-top: 18px;
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  #state { margin-top: 16px; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+  #state .ok { color: var(--ok); }
+  #state .err { color: var(--err); }
+  #state.empty { display: none; }
+  #copy {
+    display: block;
+    margin-top: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+  }
+  #copy.hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>上传文件</h1>
+  <p class="desc">一次请求上传多个文件到同一个 namespace,响应返回可在 /file 下访问的路径。</p>
+
+  <label for="ns">namespace</label>
+  <input id="ns" type="text" placeholder="例如 a/b/c,按 / 分层;留空存根目录" autocomplete="off">
+
+  <label for="file">文件(可多选)</label>
+  <input id="file" type="file" multiple>
+
+  <button id="go">上传</button>
+
+  <div id="state" class="empty"></div>
+  <button id="copy" class="hidden">复制路径</button>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const state = $('state');
+  const copyBtn = $('copy');
+
+  function render(text, cls) {
+    state.textContent = text;
+    state.className = cls || '';
+  }
+
+  $('go').addEventListener('click', async () => {
+    const files = $('file').files;
+    const ns = $('ns').value.trim();
+    if (!files.length) { render('请先选择文件', 'err'); return; }
+
+    const fd = new FormData();
+    for (const f of files) fd.append('file', f, f.name);
+    fd.append('json', JSON.stringify({ namespace: ns ? ns.split('/').filter(Boolean) : [] }));
+
+    const go = $('go');
+    go.disabled = true;
+    copyBtn.classList.add('hidden');
+    render(`正在上传 ${files.length} 个文件…`);
+    try {
+      const r = await fetch('/files', { method: 'POST', body: fd });
+      const data = await r.json().catch(() => null);
+      if (data && data.ok && data.paths) {
+        render(`成功上传 ${data.paths.length} 个文件:\n${data.paths.join('\n')}`, 'ok');
+        copyBtn.classList.remove('hidden');
+      } else if (data && data.errors) {
+        render(`成功 ${data.paths ? data.paths.length : 0} 个,失败 ${data.errors.length} 个:\n`
+          + data.errors.map((e) => `${e.name}: ${e.error}`).join('\n'), 'err');
+      } else {
+        render(`上传失败(${r.status}): ${data && data.error ? data.error : r.statusText}`, 'err');
+      }
+    } catch (e) {
+      render(`网络错误: ${e}`, 'err');
+    } finally {
+      go.disabled = false;
+    }
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(state.textContent); } catch { /* 剪贴板不可用时忽略 */ }
+  });
+</script>
+</body>
+</html>
