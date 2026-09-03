@@ -37,7 +37,7 @@ struct AppConfig {
     log_store: logs::LogStore,
 }
 
-struct ApiError(u16, String);
+pub struct ApiError(u16, String);
 
 impl ApiError {
     fn bad(msg: impl Into<String>) -> Self {

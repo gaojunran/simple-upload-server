@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use axum::{
-    extract::{Query, State},
+    extract::{FromRequest, Query, Request, State},
     Json,
 };
 use rusqlite::{params, params_from_iter, types::Value as SqlValue, Connection};
@@ -58,7 +58,7 @@ impl LogStore {
         let mut where_sql = String::new();
         compile_where(args, &mut where_sql, &mut values);
 
-        let mut conn = self.conn.lock().expect("log store poisoned");
+        let conn = self.conn.lock().expect("log store poisoned");
         let mut count_stmt = conn.prepare(&format!("SELECT COUNT(*) FROM logs{where_sql}"))?;
         let mut count_rows = count_stmt.query(params_from_iter(values.iter().cloned()))?;
         let total: i64 = count_rows
@@ -85,11 +85,34 @@ impl LogStore {
     }
 }
 
+/// 统一 Json 提取失败响应的 body 提取器:错误 Content-Type 回 415、非法 body 回 400,
+/// 均返回与其余接口一致的 {"ok":false,...} JSON 错误体。
+pub struct JsonBody(pub Value);
+
+impl<S> FromRequest<S> for JsonBody
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let Json(v) = Json::<Value>::from_request(req, state)
+            .await
+            .map_err(|e| match e {
+                axum::extract::rejection::JsonRejection::MissingJsonContentType(_) => {
+                    ApiError(415, "expected request with Content-Type: application/json".into())
+                }
+                other => ApiError::bad(format!("invalid json body: {other}")),
+            })?;
+        Ok(Self(v))
+    }
+}
+
 pub async fn post_logs(
     State(cfg): State<AppConfig>,
-    Json(body): Json<Value>,
+    body: JsonBody,
 ) -> Result<Json<Value>, ApiError> {
-    let entries: Vec<&Value> = match &body {
+    let body = body.0;    let entries: Vec<&Value> = match &body {
         Value::Array(arr) => {
             if arr.is_empty() {
                 return Err(ApiError::bad("empty log batch"));
