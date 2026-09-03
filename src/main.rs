@@ -62,7 +62,11 @@ fn env_parse<T: std::str::FromStr>(key: &str, default: T) -> T {
 async fn main() {
     let root = std::env::var("UPLOAD_ROOT")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/data/home/nebula/upload-store"));
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(|home| PathBuf::from(home).join("upload-store"))
+                .unwrap_or_else(|_| PathBuf::from("/var/tmp/upload-store"))
+        });
     let port: u16 = env_parse("UPLOAD_PORT", 8765);
 
     fs::create_dir_all(&root)

@@ -108,7 +108,7 @@ curl -X POST http://host:8765/files \
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `UPLOAD_ROOT` | `/data/home/nebula/upload-store` | 存储根目录 |
+| `UPLOAD_ROOT` | `~/upload-store` | 存储根目录,默认在用户主目录下,实际以 `UPLOAD_ROOT` 为准 |
 | `UPLOAD_PORT` | `8765` | 监听端口,仅绑定 127.0.0.1 |
 | `UPLOAD_MAX_FILES` | `50` | 单次批量上传最大文件数 |
 | `UPLOAD_MAX_FILE_MB` | `512` | 单文件大小上限 |
