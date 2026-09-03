@@ -28,6 +28,7 @@
 | `POST` | `/files` `application/json` | 批量下载(打包 zip) |
 | `POST` | `/logs` | 写入日志(单条对象或数组) |
 | `GET` | `/logs` | 查询日志(条件组合) |
+| `GET` | `/web` | 浏览器上传页面(多文件 → 指定 namespace) |
 
 ### PUT /file/{ns...}/{filename} — 单个上传
 
