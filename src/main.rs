@@ -82,7 +82,6 @@ async fn main() {
     );
 
     let app = Router::new()
-        .route("/upload", axum::routing::post(post_files)) // 兼容旧别名
         .route("/files", axum::routing::post(post_files))
         .route("/file", get(list_all))
         .route("/file/{*rest}", get(file_get).put(file_put))

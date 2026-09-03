@@ -25,7 +25,6 @@
 | `GET` | `/file/{ns...}` 或 `/file` | 递归文件列表(扁平相对路径数组) |
 | `POST` | `/files` `multipart/form-data` | 批量上传 |
 | `POST` | `/files` `application/json` | 批量下载(打包 zip) |
-| `POST` | `/upload` `multipart/form-data` | 批量上传的兼容别名(旧接口,同 `/files`) |
 
 ### PUT /file/{ns...}/{filename} — 单个上传
 
