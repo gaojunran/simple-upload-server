@@ -220,8 +220,8 @@ struct QueryArgs {
 fn compile_where(args: &QueryArgs, sql: &mut String, values: &mut Vec<SqlValue>) {
     let mut conds: Vec<&str> = Vec::new();
     if let Some(ns) = &args.namespace {
-        conds.push("namespace = ?");
-        values.push(SqlValue::Text(ns.clone()));
+        conds.push("namespace LIKE ? ESCAPE '\\'");
+        values.push(SqlValue::Text(format!("{}%", like_escape(ns))));
     }
     if let Some(kw) = &args.keyword {
         conds.push("message LIKE ? ESCAPE '\\'");

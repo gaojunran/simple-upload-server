@@ -115,7 +115,7 @@ curl -X POST http://host:8765/logs -H 'Content-Type: application/json' \
 
 | 参数 | 语义 |
 | --- | --- |
-| `namespace` | 精确匹配 |
+| `namespace` | 前缀匹配(startswith,如 `app` 命中 `app1`、`app-backend`)|
 | `keyword` | message 子串匹配(LIKE,`%`/`_`/`\` 自动转义)` |
 | `start` / `end` | 时间范围,闭区间,格式同 timestamp |
 | `op` | 条件间连接符:`and`(默认)/ `or` |
