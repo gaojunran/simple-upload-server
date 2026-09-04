@@ -184,6 +184,36 @@ RestartSec=3
 WantedBy=default.target
 ```
 
+## 命令行客户端 `simple`
+
+同一仓库编译出的第二个二进制,文件存取的 CLI 封装,直接调用上面的 HTTP 接口,无其他依赖:
+
+```bash
+cargo build --release
+cp target/release/simple ~/.local/bin/
+```
+
+```
+simple [--server <URL>] [--insecure] file <subcommand>
+
+  upload   <NAMESPACE> <FILE>...     批量上传文件到指定 namespace
+  ls       [NAMESPACE]               列出文件(省略 NAMESPACE 为全量)
+  download <NAMESPACE> <FILENAME>    下载单文件,默认写标准输出,-o <OUT> 存文件
+  pull     [NAMESPACE] [-o <DIR>]    批量拉取整个 namespace 到本地目录(自动解压)
+```
+
+- `NAMESPACE` 按 `/` 分层(如 `simple file upload a/b ./x.pdf`),写 `.` 或空串表示根目录
+- 服务器默认取环境变量 `SIMPLE_SERVER`,再默认 `https://jr.devcloud.woa.com`;`--server` 优先
+- 私有 CA 签发的证书(如 mkcert)加 `--insecure` 使用
+- 退出码:成功 `0`,请求/服务端错误 `1`,用法错误 `2`;部分成功时上传会打印成功路径并逐条报错,仍返回 `1`
+
+```bash
+simple file upload  jr/lxy ./a.pdf ./b.png
+simple file ls      jr/lxy
+simple file download jr/lxy a.pdf -o a.pdf
+simple file pull    jr/lxy -o ./backup
+```
+
 ## 设计说明
 
 - **流式写盘**:任何写入端(PUT / 批量上传)都逐 chunk 写临时文件,校验通过后 rename 到目标,内存占用与文件大小无关
