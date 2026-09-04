@@ -203,16 +203,29 @@ simple [--server <URL>] [--insecure] file <subcommand>
 ```
 
 - `NAMESPACE` 按 `/` 分层(如 `simple file upload a/b ./x.pdf`),写 `.` 或空串表示根目录
-- 服务器默认取环境变量 `SIMPLE_SERVER`,再默认 `https://jr.devcloud.woa.com`;`--server` 优先
+- 服务器默认取环境变量 `SIMPLE_SERVER`,再默认 `http://127.0.0.1:8765`;`--server` 优先,可指向任意部署地址
 - 私有 CA 签发的证书(如 mkcert)加 `--insecure` 使用
 - 退出码:成功 `0`,请求/服务端错误 `1`,用法错误 `2`;部分成功时上传会打印成功路径并逐条报错,仍返回 `1`
 
 ```bash
+simple serve                    # 本机启动 upload-server
 simple file upload  jr/lxy ./a.pdf ./b.png
 simple file ls      jr/lxy
 simple file download jr/lxy a.pdf -o a.pdf
 simple file pull    jr/lxy -o ./backup
 ```
+
+`serve` 直接复用服务端实现(同一份代码),环境变量 `UPLOAD_ROOT`/`UPLOAD_PORT`/`UPLOAD_MAX_FILES`/`UPLOAD_MAX_FILE_MB`/`UPLOAD_MAX_TOTAL_MB`/`UPLOAD_LOG_DB` 与直接运行 `upload-server` 完全一致。
+
+### 在其它机器安装 CLI
+
+需要 Rust 工具链,一条命令编译安装(只装 `simple`,会顺带编译服务端库):
+
+```bash
+cargo install --git https://github.com/gaojunran/simple-upload-server --bin simple
+```
+
+之后即可使用,连本机服务直接 `simple file ...`;连远程部署用 `--server` 或 `SIMPLE_SERVER` 指向你的地址。若要部署服务端,克隆仓库后 `cargo build --release`,产物为 `target/release/upload-server` 与 `target/release/simple`。
 
 ## 设计说明
 

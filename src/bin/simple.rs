@@ -13,25 +13,28 @@ use reqwest::Url;
 use reqwest::blocking::{Client, multipart};
 use serde_json::{Value, json};
 
-const DEFAULT_SERVER: &str = "https://jr.devcloud.woa.com";
+const DEFAULT_SERVER: &str = "http://127.0.0.1:8765";
 
 const USAGE: &str = "\
 simple - simple-upload-server 文件存取 CLI
 
 用法:
+  simple [--server <URL>] [--insecure] serve
   simple [--server <URL>] [--insecure] file upload   <NAMESPACE> <FILE>...
   simple [--server <URL>] [--insecure] file ls       [NAMESPACE]
   simple [--server <URL>] [--insecure] file download <NAMESPACE> <FILENAME> [-o <OUT>]
   simple [--server <URL>] [--insecure] file pull     [NAMESPACE] [-o <DIR>]
 
 参数:
+  serve       在本机启动 upload-server(环境变量: UPLOAD_ROOT/UPLOAD_PORT/UPLOAD_MAX_*/UPLOAD_LOG_DB)
   NAMESPACE   目录路径,按 / 分层(如 a/b/c);写 . 或留空表示根目录
   FILE        要上传的本地文件,可多个
   -o OUT      下载保存到 OUT 文件(仅 download);pull 时保存到 DIR 目录
-  --server    服务器地址,默认读环境变量 SIMPLE_SERVER,再默认 https://jr.devcloud.woa.com
+  --server    服务器地址,默认读环境变量 SIMPLE_SERVER,再默认 http://127.0.0.1:8765
   --insecure  跳过 TLS 证书校验(私有 CA/自签名证书时使用)
 
 示例:
+  simple serve
   simple file upload jr/lxy ./a.pdf ./b.png
   simple file ls jr/lxy
   simple file download jr/lxy a.pdf -o a.pdf
@@ -65,6 +68,7 @@ fn main() -> ExitCode {
         });
 
     match args.first().map(String::as_str) {
+        Some("serve") => cmd_serve(),
         Some("file") => {
             let (sub, rest) = split_args(&args);
             match sub {
@@ -76,7 +80,21 @@ fn main() -> ExitCode {
                 None => usage_err("缺少子命令(file upload / ls / download / pull)"),
             }
         }
-        _ => usage_err("未知命令,目前仅支持 file"),
+        _ => usage_err("未知命令,目前支持 serve 与 file"),
+    }
+}
+
+/// 在本机启动 upload-server,阻塞运行直到进程退出。
+fn cmd_serve() -> ExitCode {
+    match upload_server::main_entry() {
+        Ok(()) => {
+            eprintln!("服务已退出");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("服务器退出异常: {e}");
+            ExitCode::from(1)
+        }
     }
 }
 
