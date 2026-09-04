@@ -1,7 +1,8 @@
 //! simple - simple-upload-server 文件存取命令行客户端。
 //!
 //! 子命令:file upload / file ls / file download / file pull,
-//! 通过 HTTP 调用服务端 /files、/file 接口,默认连接 https://jr.devcloud.woa.com。
+//! 通过 HTTP 调用服务端 /files、/file 接口,默认连接本机 http://127.0.0.1:8765,
+//! 可用 `--server` / `SIMPLE_SERVER` 指向任意部署。
 
 use std::env;
 use std::fs;
